@@ -9,8 +9,12 @@ import {
   recordPaymentOnChain,
   checkSpendingAllowed,
   isAgentEligible,
+  flagAgentOnChain,
+  deactivateAgentOnChain,
+  updatePolicyOnChain,
 } from '../lib/contract.js';
 import config from '../config.js';
+import { ownerAuth } from '../middleware/ownerAuth.js';
 import logger from '../lib/logger.js';
 
 const router = Router();
@@ -260,6 +264,48 @@ router.get('/agents/:address/check', requireAgentsContract, async (req, res) => 
   } catch (err) {
     logger.error({ err }, 'GET /api/agents/:address/check failed');
     res.status(500).json({ error: 'Check failed', code: 'CHECK_ERROR' });
+  }
+});
+
+// Admin routes for owner actions
+router.post('/agents/:address/flag', requireAgentsContract, ownerAuth, async (req, res) => {
+  try {
+    const { address } = req.params;
+    const { reason } = req.body;
+    if (!reason || typeof reason !== 'string') {
+      return res.status(400).json({ error: '`reason` is required', code: 'INVALID_BODY' });
+    }
+    await flagAgentOnChain(address, reason, req.callerAddress);
+    res.json({ success: true });
+  } catch (err) {
+    logger.error({ err }, 'POST /agents/:address/flag failed');
+    res.status(500).json({ error: 'Flagging failed', code: 'FLAG_ERROR' });
+  }
+});
+
+router.post('/agents/:address/deactivate', requireAgentsContract, ownerAuth, async (req, res) => {
+  try {
+    const { address } = req.params;
+    await deactivateAgentOnChain(address, req.callerAddress);
+    res.json({ success: true });
+  } catch (err) {
+    logger.error({ err }, 'POST /agents/:address/deactivate failed');
+    res.status(500).json({ error: 'Deactivation failed', code: 'DEACTIVATE_ERROR' });
+  }
+});
+
+router.post('/agents/:address/policy', requireAgentsContract, ownerAuth, async (req, res) => {
+  try {
+    const { address } = req.params;
+    const { maxPerTxStroops, maxPerDayStroops, allowedCategories, minScoreToEarn } = req.body;
+    if (!maxPerTxStroops || !maxPerDayStroops || !Array.isArray(allowedCategories) || typeof minScoreToEarn !== 'number') {
+      return res.status(400).json({ error: 'Invalid policy parameters', code: 'INVALID_BODY' });
+    }
+    await updatePolicyOnChain(address, maxPerTxStroops, maxPerDayStroops, allowedCategories, minScoreToEarn, req.callerAddress);
+    res.json({ success: true });
+  } catch (err) {
+    logger.error({ err }, 'POST /agents/:address/policy failed');
+    res.status(500).json({ error: 'Policy update failed', code: 'POLICY_ERROR' });
   }
 });
 
