@@ -14,6 +14,7 @@ import config from '../config.js';
 import { getStellarServer, getNetworkPassphrase } from './stellar.js';
 import logger from './logger.js';
 
+
 const TIMEOUT = 30;
 
 function getContract() {
@@ -49,7 +50,7 @@ async function simulateAndSubmit(operation) {
   const simResult = await server.simulateTransaction(tx);
 
   if (rpc.Api.isSimulationError(simResult)) {
-    throw new Error(`Simulation failed: ${simResult.error}`);
+    throw new ContractError(`Simulation failed: ${simResult.error}`, 'SIMULATION_FAILED');
   }
 
   const preparedTx = rpc.assembleTransaction(tx, simResult).build();
@@ -57,7 +58,7 @@ async function simulateAndSubmit(operation) {
 
   const sendResult = await server.sendTransaction(preparedTx);
   if (sendResult.status === 'ERROR') {
-    throw new Error(`Transaction failed: ${JSON.stringify(sendResult.errorResult)}`);
+    throw new ContractError(`Transaction failed: ${JSON.stringify(sendResult.errorResult)}`, 'TRANSACTION_FAILED');
   }
 
   let getResult;
@@ -77,11 +78,11 @@ async function simulateAndSubmit(operation) {
   }
 
   if (!getResult || getResult.status === 'NOT_FOUND') {
-    throw new Error(`Transaction not confirmed after polling: ${sendResult.hash}`);
+    throw new ContractError(`Transaction not confirmed after polling: ${sendResult.hash}`, 'TRANSACTION_TIMEOUT');
   }
 
   if (getResult.status === 'FAILED') {
-    throw new Error(`Transaction failed on-chain: ${sendResult.hash}`);
+    throw new ContractError(`Transaction failed on-chain: ${sendResult.hash}`, 'ON_CHAIN_FAILURE');
   }
 
   return getResult;
@@ -105,7 +106,7 @@ async function simulateRead(operation) {
   const simResult = await server.simulateTransaction(tx);
 
   if (rpc.Api.isSimulationError(simResult)) {
-    throw new Error(`Simulation failed: ${simResult.error}`);
+    throw new ContractError(`Simulation failed: ${simResult.error}`, 'SIMULATION_FAILED');
   }
 
   return simResult.result?.retval;
@@ -184,8 +185,20 @@ export async function getServiceCount() {
   }
 }
 
+/**
+ * Update a service's reputation on-chain and record the change history.
+ * @param {number} id - The ID of the service to update
+ * @param {boolean} positive - Whether to increase (true) or decrease (false) reputation by 1
+ * @returns {Promise<number>} The new reputation value
+ * @throws {Error} If the contract call fails or service can't be read
+ */
 export async function updateReputation(id, positive) {
   try {
+    const before = await getService(id);
+    if (!before) {
+      throw new Error(`Service ${id} not found before reputation update`);
+    }
+
     const contract = getContract();
     const op = contract.call(
       'update_reputation',
@@ -193,8 +206,18 @@ export async function updateReputation(id, positive) {
       nativeToScVal(positive, { type: 'bool' })
     );
     await simulateAndSubmit(op);
-    const updated = await getService(id);
-    return updated?.reputation ?? 0;
+    
+    const after = await getService(id);
+    if (!after) {
+      throw new Error(`Failed to read updated reputation for service ${id}`);
+    }
+
+    const newReputation = after.reputation;
+    const delta = newReputation - before.reputation;
+
+    recordReputationChange(id, Date.now(), delta, newReputation);
+
+    return newReputation;
   } catch (err) {
     logger.error({ err, id, positive }, 'updateReputation failed');
     throw err;

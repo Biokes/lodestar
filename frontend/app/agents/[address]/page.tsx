@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, ChangeEvent } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import type { AgentEntry, SpendingPolicy } from '@/lib/types';
 import { scoreTier, TIER_LABELS } from '@/lib/types';
 import ScoreBadge from '@/components/ScoreBadge';
 import SpendingPolicyDisplay from '@/components/SpendingPolicy';
+import { fetchAgentEligibility } from '@/lib/contract';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 const EXPLORER_URL =
@@ -26,6 +27,10 @@ export default function AgentProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const [customMinScore, setCustomMinScore] = useState(0);
+  const [isEligible, setIsEligible] = useState<boolean | null>(null);
+  const [checkingEligibility, setCheckingEligibility] = useState(false);
 
   const load = useCallback(async () => {
     if (!address) return;
@@ -55,6 +60,20 @@ export default function AgentProfilePage() {
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }
+
+  const checkEligibility = async () => {
+    if (!address) return;
+    setCheckingEligibility(true);
+    try {
+      const data = await fetchAgentEligibility(address, customMinScore);
+      setIsEligible(data.eligible);
+    } catch (err) {
+      console.error('Failed to check eligibility:', err);
+      setError('Failed to check eligibility');
+    } finally {
+      setCheckingEligibility(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -212,6 +231,47 @@ export default function AgentProfilePage() {
             );
           })}
         </div>
+      </div>
+
+      {/* Custom Eligibility Check */}
+      <div className="card p-6 mb-6">
+        <h3 className="font-semibold text-base mb-4">Custom Eligibility Check</h3>
+        <p className="text-sm text-secondary mb-4">
+          Verify if this agent meets a specific minimum credit score requirement.
+        </p>
+        <div className="flex flex-wrap gap-3">
+          <input
+            type="number"
+            value={customMinScore}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => {
+              setCustomMinScore(Number(e.target.value));
+              setIsEligible(null);
+            }}
+            placeholder="Min score"
+            className="input w-36"
+            min="0"
+            max="1000"
+          />
+          <button
+            onClick={checkEligibility}
+            disabled={checkingEligibility}
+            className="btn-primary"
+          >
+            {checkingEligibility ? 'Checking...' : 'Check Eligibility'}
+          </button>
+        </div>
+        {isEligible !== null && !checkingEligibility && (
+          <div className={`mt-4 p-3 rounded-lg border flex items-center gap-3 fade-in ${
+            isEligible ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-600' : 'bg-red-500/5 border-red-500/20 text-red-600'
+          }`}>
+            <span className="text-lg font-bold">{isEligible ? '✓' : '×'}</span>
+            <span className="text-sm font-medium">
+              {isEligible 
+                ? `Agent is ELIGIBLE for services requiring a score of ${customMinScore}+` 
+                : `Agent is NOT ELIGIBLE for services requiring a score of ${customMinScore}+`}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Metadata */}
