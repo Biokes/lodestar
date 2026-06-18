@@ -190,13 +190,14 @@ export async function getServiceCount() {
  * @param {number} id - The ID of the service to update
  * @param {boolean} positive - Whether to increase (true) or decrease (false) reputation by 1
  * @returns {Promise<number>} The new reputation value
- * @throws {Error} If the contract call fails
+ * @throws {Error} If the contract call fails or service can't be read
  */
 export async function updateReputation(id, positive) {
   try {
-    const current = await getService(id);
-    const oldReputation = current?.reputation ?? 0;
-    const delta = positive ? 1 : -1;
+    const before = await getService(id);
+    if (!before) {
+      throw new Error(`Service ${id} not found before reputation update`);
+    }
 
     const contract = getContract();
     const op = contract.call(
@@ -205,8 +206,14 @@ export async function updateReputation(id, positive) {
       nativeToScVal(positive, { type: 'bool' })
     );
     await simulateAndSubmit(op);
-    const updated = await getService(id);
-    const newReputation = updated?.reputation ?? 0;
+    
+    const after = await getService(id);
+    if (!after) {
+      throw new Error(`Failed to read updated reputation for service ${id}`);
+    }
+
+    const newReputation = after.reputation;
+    const delta = newReputation - before.reputation;
 
     recordReputationChange(id, Date.now(), delta, newReputation);
 
