@@ -5,6 +5,7 @@ import Link from 'next/link';
 import type { AgentEntry, AgentStats } from '@/lib/types';
 import { fetchAgents, fetchAgentStats } from '@/lib/contract';
 import AgentCard from '@/components/AgentCard';
+import AgentCardSkeleton from '@/components/AgentCardSkeleton';
 import ScoreBadge from '@/components/ScoreBadge';
 
 type SortOption = 'score' | 'payments' | 'newest';
@@ -120,7 +121,7 @@ export default function AgentsPage() {
       {loading && (
         <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-5">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="card p-6 h-64 animate-pulse bg-border/40" />
+            <AgentCardSkeleton key={i} />
           ))}
         </div>
       )}

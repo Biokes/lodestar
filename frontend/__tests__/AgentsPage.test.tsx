@@ -33,6 +33,21 @@ const mockStats: AgentStats = {
   totalVolume: '1.00',
 };
 
+describe('AgentsPage loading state', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('shows skeleton cards while loading', () => {
+    (fetchAgents as jest.Mock).mockReturnValue(new Promise(() => {}));
+    (fetchAgentStats as jest.Mock).mockReturnValue(new Promise(() => {}));
+
+    const { container } = render(<AgentsPage />);
+    const skeletons = container.querySelectorAll('.animate-pulse');
+    expect(skeletons.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
 describe('AgentsPage retry state', () => {
   beforeEach(() => {
     jest.clearAllMocks();
