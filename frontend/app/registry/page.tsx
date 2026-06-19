@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useState } from 'react';
+import useSWR from 'swr';
 import ServiceCard from '@/components/ServiceCard';
 import ServiceCardSkeleton from '@/components/ServiceCardSkeleton';
 import { fetchServices } from '@/lib/contract';
 import { filterServices, sortServices } from '@/lib/registry';
-import type { ServiceEntry, Category, SortOption } from '@/lib/types';
+import type { Category, SortOption } from '@/lib/types';
 
 const CATEGORIES: { label: string; value: Category | 'all' }[] = [
   { label: 'All', value: 'all' },
@@ -24,30 +25,17 @@ const SORTS: { label: string; value: SortOption }[] = [
 ];
 
 export default function RegistryPage() {
-  const [services, setServices]     = useState<ServiceEntry[]>([]);
-  const [loading, setLoading]       = useState(true);
   const [activeCategory, setActive] = useState<Category | 'all'>('all');
   const [sort, setSort]             = useState<SortOption>('newest');
   const [query, setQuery]           = useState('');
 
-  const load = useCallback(async () => {
-    try {
-      const cat = activeCategory === 'all' ? undefined : activeCategory;
-      const data = await fetchServices(cat);
-      setServices(data);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }, [activeCategory]);
-
-  useEffect(() => {
-    setLoading(true);
-    load();
-    const interval = setInterval(load, 30_000);
-    return () => clearInterval(interval);
-  }, [load]);
+  // SWR replaces the manual setInterval poll: it dedupes concurrent requests,
+  // revalidates every 30s, and only re-renders when the returned data changes.
+  const { data: services = [], isLoading: loading } = useSWR(
+    ['services', activeCategory],
+    () => fetchServices(activeCategory === 'all' ? undefined : activeCategory),
+    { refreshInterval: 30_000, revalidateOnFocus: false, keepPreviousData: true }
+  );
 
   const sorted = sortServices(services, sort);
   const filtered = filterServices(sorted, query);
