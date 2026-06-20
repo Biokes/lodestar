@@ -22,35 +22,37 @@ function ensureDataDir() {
 }
 
 function loadFeed() {
-  try {
-    ensureDataDir();
-    if (!existsSync(FEED_FILE)) return [];
-    const raw = readFileSync(FEED_FILE, 'utf-8');
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  ensureDataDir();
+  if (!existsSync(FEED_FILE)) return [];
+  const raw = readFileSync(FEED_FILE, 'utf-8');
+  const parsed = JSON.parse(raw); // let parse errors bubble up
+  return Array.isArray(parsed) ? parsed : [];
 }
 
 function saveFeed(feed) {
-  try {
-    ensureDataDir();
-    writeFileSync(FEED_FILE, JSON.stringify(feed, null, 2), 'utf-8');
-  } catch (err) {
-    console.error('[activityFeed] Failed to persist feed:', err.message);
-  }
+  ensureDataDir();
+  writeFileSync(FEED_FILE, JSON.stringify(feed, null, 2), 'utf-8'); // let errors bubble up
 }
 
 export function recordActivity(entry) {
   const feed = loadFeed();
   feed.unshift(entry);
   if (feed.length > ACTIVITY_MAX_ENTRIES) feed.pop();
-  saveFeed(feed);
+  try {
+    saveFeed(feed);
+  } catch (err) {
+    console.error('[activityFeed] Failed to persist feed:', err.message);
+    throw err; // propagate so callers know persistence failed
+  }
 }
 
 export function getActivityFeed() {
-  return loadFeed();
+  try {
+    return loadFeed();
+  } catch (err) {
+    console.error('[activityFeed] Failed to load feed:', err.message);
+    throw err; // propagate so callers can handle appropriately
+  }
 }
 
 /**
