@@ -1,45 +1,18 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import RegistryPage, { PAGE_SIZE } from '../app/registry/page';
-import type { ServiceEntry } from '@/lib/types';
+
 
 jest.mock('@/lib/contract', () => ({
   fetchServices: jest.fn(),
   submitReputation: jest.fn(),
 }));
 
-import { fetchServices } from '@/lib/contract';
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-function makeService(i: number): ServiceEntry {
-  return {
-    id: i,
-    name: `Service ${i}`,
-    description: `Description for service ${i}`,
-    endpoint: `https://service-${i}.example.com`,
-    price_usdc: (i * 0.5).toFixed(2),
-    category: (['search', 'weather', 'finance', 'ai', 'data', 'compute'] as const)[i % 6],
-    provider: `GPROVIDER${String(i).padStart(4, '0')}`,
-    reputation: i,
-    active: true,
-    registered_at: 1000 + i,
-  };
-}
-
-/** Returns N services ordered newest-first (registered_at descending). */
-function makeServices(n: number): ServiceEntry[] {
-  return Array.from({ length: n }, (_, i) => makeService(n - i));
-}
-
-// ── Loading state ──────────────────────────────────────────────────────────────
 
 describe('RegistryPage loading state', () => {
   beforeEach(() => jest.clearAllMocks());
 
   it('shows skeleton cards while loading', () => {
     (fetchServices as jest.Mock).mockReturnValue(new Promise(() => {}));
-    const { getAllByTestId } = render(<RegistryPage />);
+
     expect(getAllByTestId('service-card-skeleton')).toHaveLength(4);
   });
 });
